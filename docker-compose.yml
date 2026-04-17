@@ -1,0 +1,226 @@
+version: "3.9"
+
+services:
+  # ─────────────────────────────────────────────
+  # Infrastructure
+  # ─────────────────────────────────────────────
+  postgres:
+    image: postgres:15-alpine
+    container_name: bt-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - bus-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: bt-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - bus-net
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: bt-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - bus-net
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: bt-kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - bus-net
+
+  # ─────────────────────────────────────────────
+  # Microservices
+  # ─────────────────────────────────────────────
+  auth-service:
+    build: ./services/auth-service
+    container_name: bt-auth
+    environment:
+      DATABASE_URL: postgresql://postgres:password@postgres:5432/auth_db
+      SECRET_KEY: super-secret-key-change-in-production-123456
+      ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: 30
+      REFRESH_TOKEN_EXPIRE_DAYS: 7
+      REDIS_URL: redis://redis:6379
+    ports:
+      - "8001:8001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - bus-net
+    restart: unless-stopped
+
+  user-service:
+    build: ./services/user-service
+    container_name: bt-user
+    environment:
+      DATABASE_URL: postgresql://postgres:password@postgres:5432/user_db
+      SECRET_KEY: super-secret-key-change-in-production-123456
+      ALGORITHM: HS256
+      REDIS_URL: redis://redis:6379
+    ports:
+      - "8002:8002"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - bus-net
+    restart: unless-stopped
+
+  trip-service:
+    build: ./services/trip-service
+    container_name: bt-trip
+    environment:
+      DATABASE_URL: postgresql://postgres:password@postgres:5432/trip_db
+      SECRET_KEY: super-secret-key-change-in-production-123456
+      ALGORITHM: HS256
+      REDIS_URL: redis://redis:6379
+    ports:
+      - "8003:8003"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - bus-net
+    restart: unless-stopped
+
+  booking-service:
+    build: ./services/booking-service
+    container_name: bt-booking
+    environment:
+      DATABASE_URL: postgresql://postgres:password@postgres:5432/booking_db
+      SECRET_KEY: super-secret-key-change-in-production-123456
+      ALGORITHM: HS256
+      REDIS_URL: redis://redis:6379
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      TRIP_SERVICE_URL: http://trip-service:8003
+    ports:
+      - "8004:8004"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks:
+      - bus-net
+    restart: unless-stopped
+
+  payment-service:
+    build: ./services/payment-service
+    container_name: bt-payment
+    environment:
+      DATABASE_URL: postgresql://postgres:password@postgres:5432/payment_db
+      SECRET_KEY: super-secret-key-change-in-production-123456
+      ALGORITHM: HS256
+      REDIS_URL: redis://redis:6379
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      BOOKING_SERVICE_URL: http://booking-service:8004
+    ports:
+      - "8005:8005"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks:
+      - bus-net
+    restart: unless-stopped
+
+  notification-service:
+    build: ./services/notification-service
+    container_name: bt-notification
+    environment:
+      DATABASE_URL: postgresql://postgres:password@postgres:5432/notification_db
+      SECRET_KEY: super-secret-key-change-in-production-123456
+      ALGORITHM: HS256
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      SMTP_HOST: smtp.gmail.com
+      SMTP_PORT: "587"
+      SMTP_USER: noreply@busticket.com
+      SMTP_PASSWORD: mock-password
+    ports:
+      - "8006:8006"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks:
+      - bus-net
+    restart: unless-stopped
+
+  # ─────────────────────────────────────────────
+  # API Gateway
+  # ─────────────────────────────────────────────
+  api-gateway:
+    build: ./services/api-gateway
+    container_name: bt-gateway
+    ports:
+      - "80:80"
+    depends_on:
+      - auth-service
+      - user-service
+      - trip-service
+      - booking-service
+      - payment-service
+      - notification-service
+    networks:
+      - bus-net
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  bus-net:
+    driver: bridge
