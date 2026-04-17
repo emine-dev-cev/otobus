@@ -1,0 +1,79 @@
+name: Docker Compose Test
+
+on:
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  integration-test:
+    name: 🐳 Docker Compose Integration
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: 🐳 Start services
+        run: |
+          docker-compose up -d --build
+          echo "⏳ Waiting for services to start..."
+          sleep 30
+
+      - name: 🏥 Health checks
+        run: |
+          echo "── Auth Service ──"
+          curl -sf http://localhost:8001/auth/health || echo "❌ Auth failed"
+          
+          echo "── User Service ──"
+          curl -sf http://localhost:8002/users/health || echo "❌ User failed"
+          
+          echo "── Trip Service ──"
+          curl -sf http://localhost:8003/trips/health || echo "❌ Trip failed"
+          
+          echo "── Booking Service ──"
+          curl -sf http://localhost:8004/bookings/health || echo "❌ Booking failed"
+          
+          echo "── Payment Service ──"
+          curl -sf http://localhost:8005/payments/health || echo "❌ Payment failed"
+          
+          echo "── Notification Service ──"
+          curl -sf http://localhost:8006/notifications/health || echo "❌ Notification failed"
+          
+          echo "── API Gateway ──"
+          curl -sf http://localhost:80/health || echo "❌ Gateway failed"
+
+      - name: 🧪 End-to-end test
+        run: |
+          # Register
+          echo "📝 Registering user..."
+          REGISTER=$(curl -s -X POST http://localhost:8001/auth/register \
+            -H "Content-Type: application/json" \
+            -d '{"email":"test@test.com","password":"Test1234!","full_name":"Test User"}')
+          echo "$REGISTER"
+
+          # Login
+          echo "🔑 Logging in..."
+          LOGIN=$(curl -s -X POST http://localhost:8001/auth/login \
+            -H "Content-Type: application/json" \
+            -d '{"email":"test@test.com","password":"Test1234!"}')
+          TOKEN=$(echo $LOGIN | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])" 2>/dev/null || echo "")
+          
+          if [ -z "$TOKEN" ]; then
+            echo "❌ Login failed"
+            exit 1
+          fi
+          echo "✅ Got token: ${TOKEN:0:20}..."
+
+          # List trips
+          echo "🚌 Listing trips..."
+          curl -sf http://localhost:8003/trips || echo "No trips yet"
+
+          echo "✅ E2E test complete!"
+
+      - name: 📋 Logs on failure
+        if: failure()
+        run: docker-compose logs --tail=50
+
+      - name: 🧹 Cleanup
+        if: always()
+        run: docker-compose down -v

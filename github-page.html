@@ -1,0 +1,1321 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>emine-dev-cev / bus-ticket-app · GitHub</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    /* ═══════════════════════════════════════
+       DESIGN TOKENS
+    ═══════════════════════════════════════ */
+    :root {
+      --bg-base:        #0d0b14;
+      --bg-surface:     #13101f;
+      --bg-card:        #1a1530;
+      --bg-card-hover:  #211c3a;
+      --bg-input:       #1e1a32;
+      --border:         #2e2850;
+      --border-subtle:  #231f3d;
+
+      --purple-100: #f3eeff;
+      --purple-200: #d8c4ff;
+      --purple-300: #b794ff;
+      --purple-400: #9b6dff;
+      --purple-500: #7c3aed;
+      --purple-600: #6d28d9;
+      --purple-700: #5b21b6;
+      --purple-glow: rgba(124, 58, 237, 0.25);
+
+      --white:   #ffffff;
+      --gray-50: #f8f7ff;
+      --gray-100:#e8e4f8;
+      --gray-300:#a89dc8;
+      --gray-500:#6b5f8a;
+      --gray-700:#3d3460;
+
+      --green:   #23c55e;
+      --blue:    #60a5fa;
+      --yellow:  #fbbf24;
+      --red:     #f87171;
+
+      --font-sans: 'Inter', -apple-system, sans-serif;
+      --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+
+      --radius-sm:  6px;
+      --radius-md:  10px;
+      --radius-lg:  14px;
+      --radius-xl:  20px;
+    }
+
+    /* ═══════════════════════════════════════
+       RESET & BASE
+    ═══════════════════════════════════════ */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: var(--font-sans);
+      background: var(--bg-base);
+      color: var(--gray-100);
+      min-height: 100vh;
+      line-height: 1.5;
+    }
+    a { color: inherit; text-decoration: none; }
+    button { cursor: pointer; font-family: var(--font-sans); }
+
+    /* ═══════════════════════════════════════
+       TOP NAV
+    ═══════════════════════════════════════ */
+    .navbar {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(13, 11, 20, 0.85);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      height: 64px;
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .nav-logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .nav-logo svg {
+      width: 36px; height: 36px;
+      fill: var(--purple-300);
+      filter: drop-shadow(0 0 8px var(--purple-glow));
+    }
+
+    .nav-search {
+      flex: 1;
+      max-width: 320px;
+      position: relative;
+    }
+    .nav-search input {
+      width: 100%;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 8px 14px 8px 36px;
+      color: var(--gray-300);
+      font-size: 13px;
+      outline: none;
+      transition: border-color .2s, box-shadow .2s;
+    }
+    .nav-search input:focus {
+      border-color: var(--purple-500);
+      box-shadow: 0 0 0 3px var(--purple-glow);
+      color: var(--white);
+    }
+    .nav-search .search-icon {
+      position: absolute;
+      left: 10px; top: 50%;
+      transform: translateY(-50%);
+      color: var(--gray-500);
+      font-size: 14px;
+    }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      margin-left: auto;
+    }
+    .nav-link {
+      padding: 6px 12px;
+      border-radius: var(--radius-sm);
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--gray-300);
+      transition: background .15s, color .15s;
+    }
+    .nav-link:hover { background: var(--bg-card); color: var(--white); }
+
+    .nav-avatar {
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--purple-500), var(--purple-300));
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 14px; color: white;
+      border: 2px solid var(--purple-400);
+      box-shadow: 0 0 10px var(--purple-glow);
+      cursor: pointer;
+    }
+
+    /* ═══════════════════════════════════════
+       REPO HEADER TABS
+    ═══════════════════════════════════════ */
+    .repo-tabs-bar {
+      background: var(--bg-surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 32px;
+    }
+    .repo-tabs {
+      display: flex;
+      gap: 0;
+      overflow-x: auto;
+    }
+    .repo-tab {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 14px 16px;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--gray-300);
+      border-bottom: 2px solid transparent;
+      transition: color .15s, border-color .15s;
+      white-space: nowrap;
+      cursor: pointer;
+    }
+    .repo-tab:hover { color: var(--gray-100); }
+    .repo-tab.active {
+      color: var(--white);
+      border-bottom-color: var(--purple-400);
+    }
+    .tab-badge {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 1px 7px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--gray-300);
+    }
+
+    /* ═══════════════════════════════════════
+       MAIN LAYOUT
+    ═══════════════════════════════════════ */
+    .main-container {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 32px 32px;
+    }
+
+    /* Repo breadcrumb */
+    .repo-breadcrumb {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 20px;
+      font-size: 20px;
+      font-weight: 600;
+    }
+    .breadcrumb-owner { color: var(--purple-300); }
+    .breadcrumb-sep { color: var(--gray-500); font-weight: 300; }
+    .breadcrumb-repo { color: var(--white); }
+    .repo-badge {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 10px;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      color: var(--gray-300);
+      background: var(--bg-card);
+    }
+
+    /* Repo actions bar */
+    .repo-actions {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+    }
+    .action-btn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      font-weight: 500;
+      border: 1px solid var(--border);
+      background: var(--bg-card);
+      color: var(--gray-100);
+      transition: all .15s;
+    }
+    .action-btn:hover {
+      background: var(--bg-card-hover);
+      border-color: var(--purple-500);
+      color: var(--white);
+    }
+    .action-btn .icon { font-size: 14px; }
+    .action-btn .count {
+      background: var(--bg-input);
+      border-radius: 20px;
+      padding: 0 8px;
+      font-size: 12px;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--purple-600), var(--purple-500));
+      border-color: var(--purple-500);
+      color: white;
+      font-weight: 600;
+    }
+    .btn-primary:hover {
+      background: linear-gradient(135deg, var(--purple-500), var(--purple-400));
+      box-shadow: 0 0 16px var(--purple-glow);
+    }
+    .spacer { flex: 1; }
+
+    /* ═══════════════════════════════════════
+       GRID LAYOUT
+    ═══════════════════════════════════════ */
+    .repo-grid {
+      display: grid;
+      grid-template-columns: 1fr 296px;
+      gap: 24px;
+      align-items: start;
+    }
+
+    /* ═══════════════════════════════════════
+       FILE BROWSER CARD
+    ═══════════════════════════════════════ */
+    .file-browser {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      background: var(--bg-surface);
+    }
+
+    .file-browser-header {
+      padding: 12px 16px;
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .branch-selector {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 5px 12px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--white);
+      cursor: pointer;
+      transition: border-color .15s;
+    }
+    .branch-selector:hover { border-color: var(--purple-500); }
+    .breadcrumb-path {
+      font-size: 14px;
+      color: var(--gray-300);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .path-active { color: var(--white); font-weight: 600; }
+
+    .commit-info-bar {
+      padding: 10px 16px;
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 13px;
+    }
+    .commit-author {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .mini-avatar {
+      width: 20px; height: 20px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--purple-500), var(--purple-300));
+      display: flex; align-items: center; justify-content: center;
+      font-size: 9px; font-weight: 700; color: white;
+    }
+    .commit-msg { color: var(--white); font-weight: 500; }
+    .commit-hash {
+      color: var(--purple-300);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      background: var(--bg-input);
+      padding: 2px 8px;
+      border-radius: var(--radius-sm);
+    }
+    .commit-time { color: var(--gray-500); }
+
+    /* File rows */
+    .file-row {
+      display: flex;
+      align-items: center;
+      padding: 8px 16px;
+      border-bottom: 1px solid var(--border-subtle);
+      transition: background .1s;
+      gap: 10px;
+    }
+    .file-row:last-child { border-bottom: none; }
+    .file-row:hover { background: var(--bg-card); }
+    .file-icon { font-size: 16px; width: 20px; text-align: center; }
+    .file-name {
+      flex: 1;
+      font-size: 14px;
+      color: var(--purple-200);
+      font-weight: 500;
+      cursor: pointer;
+    }
+    .file-name:hover { color: var(--purple-300); text-decoration: underline; }
+    .file-name.dir { color: var(--purple-300); }
+    .file-commit {
+      flex: 2;
+      font-size: 13px;
+      color: var(--gray-500);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .file-time {
+      font-size: 12px;
+      color: var(--gray-500);
+      white-space: nowrap;
+    }
+
+    /* ═══════════════════════════════════════
+       README CARD
+    ═══════════════════════════════════════ */
+    .readme-card {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      background: var(--bg-surface);
+      margin-top: 24px;
+    }
+    .readme-header {
+      padding: 12px 16px;
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 600;
+      font-size: 14px;
+    }
+    .readme-body {
+      padding: 28px 32px;
+    }
+
+    .readme-body h1 {
+      font-size: 28px;
+      font-weight: 700;
+      margin-bottom: 12px;
+      background: linear-gradient(135deg, var(--purple-200), var(--white));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .readme-body p { color: var(--gray-300); margin-bottom: 16px; font-size: 15px; }
+    .readme-body h2 {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--white);
+      margin: 24px 0 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    .readme-body code {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      padding: 1px 6px;
+      border-radius: 4px;
+      color: var(--purple-200);
+    }
+    .readme-body pre {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 16px;
+      overflow-x: auto;
+      margin: 12px 0;
+    }
+    .readme-body pre code {
+      background: none;
+      border: none;
+      padding: 0;
+      font-size: 13px;
+      color: var(--green);
+    }
+
+    /* Architecture diagram */
+    .arch-diagram {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      margin: 16px 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+    .arch-client {
+      background: linear-gradient(135deg, var(--purple-600), var(--purple-500));
+      color: white;
+      font-weight: 700;
+      padding: 10px 28px;
+      border-radius: var(--radius-md);
+      font-size: 14px;
+      box-shadow: 0 0 20px var(--purple-glow);
+    }
+    .arch-arrow { color: var(--gray-500); font-size: 18px; }
+    .arch-gateway {
+      background: linear-gradient(135deg, var(--purple-700), var(--purple-600));
+      color: white;
+      font-weight: 700;
+      padding: 10px 28px;
+      border-radius: var(--radius-md);
+      font-size: 14px;
+      border: 1px solid var(--purple-400);
+    }
+    .arch-services {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: center;
+      margin: 4px 0;
+    }
+    .arch-service {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 8px 14px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--purple-200);
+      text-align: center;
+      transition: border-color .2s, transform .2s;
+      cursor: default;
+    }
+    .arch-service:hover {
+      border-color: var(--purple-400);
+      transform: translateY(-2px);
+      background: var(--bg-card);
+    }
+    .arch-service .port { color: var(--gray-500); font-size: 11px; display: block; font-family: var(--font-mono); }
+    .arch-infra {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .arch-infra-item {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 6px 12px;
+      font-size: 12px;
+      color: var(--gray-300);
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    /* Tech stack badges */
+    .badges { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0; }
+    .badge {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      border: 1px solid;
+    }
+    .badge-python  { background: rgba(59,130,246,.1); border-color: rgba(59,130,246,.4); color: #93c5fd; }
+    .badge-docker  { background: rgba(14,165,233,.1); border-color: rgba(14,165,233,.4); color: #7dd3fc; }
+    .badge-k8s     { background: rgba(124,58,237,.15); border-color: rgba(124,58,237,.4); color: var(--purple-200); }
+    .badge-kafka   { background: rgba(245,158,11,.1); border-color: rgba(245,158,11,.4); color: #fcd34d; }
+    .badge-postgres{ background: rgba(52,211,153,.1); border-color: rgba(52,211,153,.4); color: #6ee7b7; }
+    .badge-redis   { background: rgba(248,113,113,.1); border-color: rgba(248,113,113,.4); color: #fca5a5; }
+
+    /* API table */
+    .api-table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13px; }
+    .api-table th {
+      text-align: left;
+      padding: 10px 12px;
+      background: var(--bg-card);
+      color: var(--purple-200);
+      font-weight: 600;
+      border-bottom: 2px solid var(--border);
+    }
+    .api-table td {
+      padding: 9px 12px;
+      border-bottom: 1px solid var(--border-subtle);
+      color: var(--gray-300);
+    }
+    .api-table tr:last-child td { border-bottom: none; }
+    .api-table tr:hover td { background: var(--bg-card); }
+    .method {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 4px;
+    }
+    .method-get    { background: rgba(52,211,153,.15); color: #6ee7b7; }
+    .method-post   { background: rgba(96,165,250,.15); color: #93c5fd; }
+    .method-delete { background: rgba(248,113,113,.15); color: #fca5a5; }
+    .method-patch  { background: rgba(251,191,36,.15); color: #fcd34d; }
+    .endpoint { font-family: var(--font-mono); color: var(--purple-200); }
+
+    /* ═══════════════════════════════════════
+       SIDEBAR
+    ═══════════════════════════════════════ */
+    .sidebar { display: flex; flex-direction: column; gap: 20px; }
+
+    .sidebar-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 20px;
+    }
+    .sidebar-card h3 {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--white);
+      margin-bottom: 14px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .about-desc {
+      font-size: 14px;
+      color: var(--gray-300);
+      margin-bottom: 14px;
+      line-height: 1.6;
+    }
+    .about-item {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      margin-bottom: 8px;
+      font-size: 13px;
+      color: var(--gray-300);
+    }
+    .about-item .ico { font-size: 15px; }
+
+    /* Stats row */
+    .stats-row {
+      display: flex;
+      gap: 16px;
+      margin: 8px 0;
+    }
+    .stat-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      color: var(--gray-300);
+      cursor: pointer;
+    }
+    .stat-item:hover { color: var(--white); }
+    .stat-num { font-weight: 700; color: var(--white); }
+
+    /* Language bar */
+    .lang-bar {
+      height: 8px;
+      border-radius: 4px;
+      display: flex;
+      overflow: hidden;
+      margin-bottom: 12px;
+      gap: 2px;
+    }
+    .lang-seg { border-radius: 2px; cursor: pointer; transition: opacity .15s; }
+    .lang-seg:hover { opacity: .8; }
+
+    .lang-list { display: flex; flex-direction: column; gap: 8px; }
+    .lang-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 13px;
+    }
+    .lang-dot-label { display: flex; align-items: center; gap: 7px; color: var(--gray-300); }
+    .lang-dot { width: 10px; height: 10px; border-radius: 50%; }
+    .lang-pct { color: var(--gray-500); font-size: 12px; }
+
+    /* Contributors */
+    .contributors { display: flex; gap: 8px; flex-wrap: wrap; }
+    .contributor-av {
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--purple-500), var(--purple-300));
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 13px; color: white;
+      border: 2px solid var(--border);
+      cursor: pointer;
+      transition: border-color .15s, transform .15s;
+    }
+    .contributor-av:hover { border-color: var(--purple-400); transform: translateY(-2px); }
+
+    /* Releases */
+    .release-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+    .release-item:last-child { border-bottom: none; }
+    .release-tag {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--purple-300);
+      background: rgba(124,58,237,.15);
+      padding: 2px 8px;
+      border-radius: 4px;
+    }
+    .release-name { font-size: 13px; color: var(--gray-300); }
+    .release-latest {
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--green);
+      background: rgba(35,197,94,.1);
+      border: 1px solid rgba(35,197,94,.3);
+      padding: 2px 7px;
+      border-radius: 20px;
+    }
+
+    /* Docker section */
+    .docker-section {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      margin-top: 24px;
+    }
+    .docker-header {
+      background: linear-gradient(135deg, rgba(14,165,233,.15), rgba(124,58,237,.15));
+      border-bottom: 1px solid var(--border);
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .docker-logo {
+      font-size: 28px;
+    }
+    .docker-title { font-weight: 700; font-size: 16px; color: var(--white); }
+    .docker-sub { font-size: 12px; color: var(--gray-500); }
+
+    .docker-body { padding: 20px; }
+    .docker-services {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 12px;
+      margin: 16px 0;
+    }
+    .docker-service-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 14px 16px;
+      transition: border-color .2s, transform .2s, box-shadow .2s;
+      cursor: pointer;
+    }
+    .docker-service-card:hover {
+      border-color: var(--purple-500);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 20px var(--purple-glow);
+    }
+    .ds-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+    .ds-name { font-weight: 700; font-size: 14px; color: var(--white); }
+    .ds-status {
+      display: flex; align-items: center; gap: 5px;
+      font-size: 11px; font-weight: 600;
+    }
+    .ds-status.running { color: var(--green); }
+    .dot-pulse {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--green);
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: .5; transform: scale(1.3); }
+    }
+    .ds-port {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--purple-300);
+      background: rgba(124,58,237,.1);
+      padding: 2px 7px;
+      border-radius: 4px;
+    }
+    .ds-image { font-size: 12px; color: var(--gray-500); margin-top: 4px; font-family: var(--font-mono); }
+    .ds-desc { font-size: 12px; color: var(--gray-500); margin-top: 6px; }
+
+    .docker-cmd {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 16px;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      color: var(--green);
+      position: relative;
+      margin: 12px 0;
+    }
+    .docker-cmd .prompt { color: var(--purple-300); }
+    .copy-btn {
+      position: absolute;
+      top: 10px; right: 10px;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 4px 10px;
+      color: var(--gray-300);
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: var(--font-sans);
+      transition: all .15s;
+    }
+    .copy-btn:hover { border-color: var(--purple-500); color: var(--white); }
+
+    /* ═══════════════════════════════════════
+       TOASTS / ALERTS
+    ═══════════════════════════════════════ */
+    .alert {
+      background: rgba(124,58,237,.1);
+      border: 1px solid rgba(124,58,237,.3);
+      border-radius: var(--radius-md);
+      padding: 12px 16px;
+      font-size: 13px;
+      color: var(--purple-200);
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    .alert .ico { font-size: 16px; margin-top: 1px; }
+    .alert a { color: var(--purple-300); text-decoration: underline; }
+
+    /* ═══════════════════════════════════════
+       FOOTER
+    ═══════════════════════════════════════ */
+    footer {
+      margin-top: 64px;
+      border-top: 1px solid var(--border);
+      padding: 24px 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+    .footer-link {
+      font-size: 12px;
+      color: var(--gray-500);
+      transition: color .15s;
+    }
+    .footer-link:hover { color: var(--purple-300); }
+
+    /* ═══════════════════════════════════════
+       RESPONSIVE
+    ═══════════════════════════════════════ */
+    @media (max-width: 900px) {
+      .repo-grid { grid-template-columns: 1fr; }
+      .docker-services { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 600px) {
+      .main-container { padding: 16px; }
+      .docker-services { grid-template-columns: 1fr; }
+      .nav-search { display: none; }
+      .badges { gap: 6px; }
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg-base); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--purple-700); }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════
+     NAV
+═══════════════════════════════════════════════════ -->
+<nav class="navbar">
+  <div class="nav-logo">
+    <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+      <path d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38
+               0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88
+               3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0
+               0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2
+               .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08
+               2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64
+               3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82
+               1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995
+               7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z"/>
+    </svg>
+    <span style="font-weight:700;font-size:16px;color:var(--white)">GitHub</span>
+  </div>
+
+  <div class="nav-search">
+    <span class="search-icon">🔍</span>
+    <input type="text" placeholder="Depo, kullanıcı veya ekip ara..." />
+  </div>
+
+  <div class="nav-links">
+    <a class="nav-link" href="#">Çekme İstekleri</a>
+    <a class="nav-link" href="#">Sorunlar</a>
+    <a class="nav-link" href="#">Pazar Yeri</a>
+    <a class="nav-link" href="#">Keşfet</a>
+  </div>
+
+  <div class="nav-avatar">E</div>
+</nav>
+
+<!-- ═══════════════════════════════════════════════════
+     REPO TABS
+═══════════════════════════════════════════════════ -->
+<div class="repo-tabs-bar">
+  <div class="repo-tabs">
+    <div class="repo-tab active">📁 Kod</div>
+    <div class="repo-tab">⚠️ Sorunlar <span class="tab-badge">0</span></div>
+    <div class="repo-tab">🔀 Çekme İstekleri <span class="tab-badge">0</span></div>
+    <div class="repo-tab">⚡ Eylemler</div>
+    <div class="repo-tab">📦 Projeler</div>
+    <div class="repo-tab">🔒 Güvenlik</div>
+    <div class="repo-tab">📊 İçgörüler</div>
+    <div class="repo-tab">⚙️ Ayarlar</div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════
+     MAIN
+═══════════════════════════════════════════════════ -->
+<div class="main-container">
+
+  <!-- Breadcrumb -->
+  <div class="repo-breadcrumb">
+    <span class="breadcrumb-owner">emine-dev-cev</span>
+    <span class="breadcrumb-sep">/</span>
+    <span class="breadcrumb-repo">bus-ticket-app</span>
+    <span class="repo-badge">Genel</span>
+  </div>
+
+  <!-- Alert -->
+  <div class="alert">
+    <span class="ico">ℹ️</span>
+    <span>
+      Bu depo bir <strong>Mikroservis Otobüs Bilet Rezervasyon Sistemi</strong> içermektedir.
+      Detaylı kurulum için <a href="#">README.md</a> dosyasını inceleyiniz.
+      Docker ile çalıştırmak için <a href="#">docker-compose.yml</a> kullanın.
+    </span>
+  </div>
+
+  <!-- Action Buttons -->
+  <div class="repo-actions">
+    <button class="action-btn">🔔 Bildirimler izle <span class="count">1</span></button>
+    <button class="action-btn">🍴 Çatal oluştur <span class="count">0</span></button>
+    <button class="action-btn">⭐ Yıldız <span class="count">0</span></button>
+    <div class="spacer"></div>
+    <button class="action-btn btn-primary" onclick="alert('git clone https://github.com/emine-dev-cev/bus-ticket-app.git')">
+      💻 Kod &nbsp;▾
+    </button>
+  </div>
+
+  <!-- Grid -->
+  <div class="repo-grid">
+
+    <!-- LEFT -->
+    <div class="left-col">
+
+      <!-- File Browser -->
+      <div class="file-browser">
+        <div class="file-browser-header">
+          <div class="branch-selector">🌿 main ▾</div>
+          <span class="breadcrumb-path">
+            <span class="path-active">bus-ticket-app</span>
+          </span>
+          <div style="margin-left:auto;display:flex;gap:8px">
+            <button class="action-btn" style="padding:5px 10px;font-size:12px">📂 Dosya ekle</button>
+            <button class="action-btn btn-primary" style="padding:5px 10px;font-size:12px">📋 Commit</button>
+          </div>
+        </div>
+
+        <div class="commit-info-bar">
+          <div class="commit-author">
+            <div class="mini-avatar">E</div>
+            <span style="color:var(--white);font-weight:600">emine-dev-cev</span>
+            <span class="commit-msg">initial commit: microservices bus ticket app</span>
+          </div>
+          <div style="display:flex;gap:10px;align-items:center">
+            <span class="commit-hash">a943220</span>
+            <span class="commit-time">az önce</span>
+          </div>
+        </div>
+
+        <!-- Rows: dirs -->
+        <div class="file-row">
+          <span class="file-icon">📁</span>
+          <span class="file-name dir">k8s</span>
+          <span class="file-commit">feat: kubernetes manifests for all services</span>
+          <span class="file-time">az önce</span>
+        </div>
+        <div class="file-row">
+          <span class="file-icon">📁</span>
+          <span class="file-name dir">scripts</span>
+          <span class="file-commit">feat: db initialization script</span>
+          <span class="file-time">az önce</span>
+        </div>
+        <div class="file-row">
+          <span class="file-icon">📁</span>
+          <span class="file-name dir">services</span>
+          <span class="file-commit">feat: all 6 microservices + api gateway</span>
+          <span class="file-time">az önce</span>
+        </div>
+
+        <!-- Rows: files -->
+        <div class="file-row">
+          <span class="file-icon">🙈</span>
+          <span class="file-name">.gitignore</span>
+          <span class="file-commit">chore: add standard python gitignore</span>
+          <span class="file-time">az önce</span>
+        </div>
+        <div class="file-row">
+          <span class="file-icon">📖</span>
+          <span class="file-name">README.md</span>
+          <span class="file-commit">docs: full project documentation</span>
+          <span class="file-time">az önce</span>
+        </div>
+        <div class="file-row">
+          <span class="file-icon">🐳</span>
+          <span class="file-name">docker-compose.yml</span>
+          <span class="file-commit">feat: docker compose for local dev environment</span>
+          <span class="file-time">az önce</span>
+        </div>
+      </div>
+
+      <!-- Docker Section -->
+      <div class="docker-section">
+        <div class="docker-header">
+          <span class="docker-logo">🐳</span>
+          <div>
+            <div class="docker-title">Docker Compose Servisleri</div>
+            <div class="docker-sub">Tüm servisleri tek komutla başlatın · docker-compose up --build</div>
+          </div>
+        </div>
+        <div class="docker-body">
+          <div class="docker-cmd">
+            <span class="prompt">$</span> docker-compose up --build
+            <button class="copy-btn" onclick="navigator.clipboard.writeText('docker-compose up --build');this.textContent='Kopyalandı ✓'">Kopyala</button>
+          </div>
+
+          <div class="docker-services">
+
+            <div class="docker-service-card">
+              <div class="ds-header">
+                <span class="ds-name">🔐 Auth</span>
+                <span class="ds-status running"><span class="dot-pulse"></span>Çalışıyor</span>
+              </div>
+              <span class="ds-port">:8001</span>
+              <div class="ds-image">python:3.11-slim</div>
+              <div class="ds-desc">JWT kayıt / giriş / token yenileme</div>
+            </div>
+
+            <div class="docker-service-card">
+              <div class="ds-header">
+                <span class="ds-name">👤 User</span>
+                <span class="ds-status running"><span class="dot-pulse"></span>Çalışıyor</span>
+              </div>
+              <span class="ds-port">:8002</span>
+              <div class="ds-image">python:3.11-slim</div>
+              <div class="ds-desc">Kullanıcı profil yönetimi</div>
+            </div>
+
+            <div class="docker-service-card">
+              <div class="ds-header">
+                <span class="ds-name">🚌 Trip</span>
+                <span class="ds-status running"><span class="dot-pulse"></span>Çalışıyor</span>
+              </div>
+              <span class="ds-port">:8003</span>
+              <div class="ds-image">python:3.11-slim</div>
+              <div class="ds-desc">Sefer & koltuk yönetimi</div>
+            </div>
+
+            <div class="docker-service-card">
+              <div class="ds-header">
+                <span class="ds-name">🎫 Booking</span>
+                <span class="ds-status running"><span class="dot-pulse"></span>Çalışıyor</span>
+              </div>
+              <span class="ds-port">:8004</span>
+              <div class="ds-image">python:3.11-slim</div>
+              <div class="ds-desc">Bilet rezervasyon + Kafka</div>
+            </div>
+
+            <div class="docker-service-card">
+              <div class="ds-header">
+                <span class="ds-name">💳 Payment</span>
+                <span class="ds-status running"><span class="dot-pulse"></span>Çalışıyor</span>
+              </div>
+              <span class="ds-port">:8005</span>
+              <div class="ds-image">python:3.11-slim</div>
+              <div class="ds-desc">Mock ödeme + Kafka publish</div>
+            </div>
+
+            <div class="docker-service-card">
+              <div class="ds-header">
+                <span class="ds-name">🔔 Notify</span>
+                <span class="ds-status running"><span class="dot-pulse"></span>Çalışıyor</span>
+              </div>
+              <span class="ds-port">:8006</span>
+              <div class="ds-image">python:3.11-slim</div>
+              <div class="ds-desc">Kafka consumer → mail/SMS</div>
+            </div>
+
+            <div class="docker-service-card">
+              <div class="ds-header">
+                <span class="ds-name">🌐 Gateway</span>
+                <span class="ds-status running"><span class="dot-pulse"></span>Çalışıyor</span>
+              </div>
+              <span class="ds-port">:80</span>
+              <div class="ds-image">nginx:alpine</div>
+              <div class="ds-desc">Reverse proxy API gateway</div>
+            </div>
+
+            <div class="docker-service-card">
+              <div class="ds-header">
+                <span class="ds-name">🐘 Postgres</span>
+                <span class="ds-status running"><span class="dot-pulse"></span>Çalışıyor</span>
+              </div>
+              <span class="ds-port">:5432</span>
+              <div class="ds-image">postgres:15-alpine</div>
+              <div class="ds-desc">6 ayrı servis veritabanı</div>
+            </div>
+
+            <div class="docker-service-card">
+              <div class="ds-header">
+                <span class="ds-name">⚡ Redis</span>
+                <span class="ds-status running"><span class="dot-pulse"></span>Çalışıyor</span>
+              </div>
+              <span class="ds-port">:6379</span>
+              <div class="ds-image">redis:7-alpine</div>
+              <div class="ds-desc">Önbellek & oturum yönetimi</div>
+            </div>
+
+            <div class="docker-service-card">
+              <div class="ds-header">
+                <span class="ds-name">📨 Kafka</span>
+                <span class="ds-status running"><span class="dot-pulse"></span>Çalışıyor</span>
+              </div>
+              <span class="ds-port">:9092</span>
+              <div class="ds-image">confluentinc/cp-kafka:7.5</div>
+              <div class="ds-desc">Mesaj kuyruğu</div>
+            </div>
+
+          </div>
+
+          <!-- Architecture diagram inside readme -->
+          <div class="arch-diagram">
+            <div class="arch-client">🖥️ İstemci (Tarayıcı / Mobil)</div>
+            <div class="arch-arrow">↕</div>
+            <div class="arch-gateway">🌐 API Gateway · Nginx · :80</div>
+            <div class="arch-arrow">↕</div>
+            <div class="arch-services">
+              <div class="arch-service">🔐 Auth<span class="port">:8001</span></div>
+              <div class="arch-service">👤 User<span class="port">:8002</span></div>
+              <div class="arch-service">🚌 Trip<span class="port">:8003</span></div>
+              <div class="arch-service">🎫 Booking<span class="port">:8004</span></div>
+              <div class="arch-service">💳 Payment<span class="port">:8005</span></div>
+              <div class="arch-service">🔔 Notify<span class="port">:8006</span></div>
+            </div>
+            <div class="arch-arrow">↕</div>
+            <div class="arch-infra">
+              <div class="arch-infra-item">🐘 PostgreSQL</div>
+              <div class="arch-infra-item">⚡ Redis</div>
+              <div class="arch-infra-item">📨 Kafka</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- README -->
+      <div class="readme-card">
+        <div class="readme-header">
+          📖 README.md
+          <span style="margin-left:auto;color:var(--gray-500);font-size:12px">✏️ Düzenle</span>
+        </div>
+        <div class="readme-body">
+          <h1>🚌 Bus Ticket Reservation System</h1>
+          <p>Python FastAPI tabanlı, tam özellikli <strong>mikroservis</strong> otobüs bilet rezervasyon sistemi. PostgreSQL, Redis, Kafka, Docker ve Kubernetes ile production-ready mimari.</p>
+
+          <div class="badges">
+            <span class="badge badge-python">🐍 Python 3.11</span>
+            <span class="badge badge-docker">🐳 Docker</span>
+            <span class="badge badge-k8s">☸️ Kubernetes</span>
+            <span class="badge badge-kafka">📨 Apache Kafka</span>
+            <span class="badge badge-postgres">🐘 PostgreSQL 15</span>
+            <span class="badge badge-redis">⚡ Redis 7</span>
+          </div>
+
+          <h2>🚀 Hızlı Başlangıç</h2>
+          <pre><code>git clone https://github.com/emine-dev-cev/bus-ticket-app.git
+cd bus-ticket-app
+docker-compose up --build</code></pre>
+
+          <h2>📡 API Endpoint'leri</h2>
+          <table class="api-table">
+            <thead>
+              <tr><th>Metot</th><th>Endpoint</th><th>Açıklama</th><th>Servis</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><span class="method method-post">POST</span></td><td class="endpoint">/auth/register</td><td>Yeni kullanıcı kaydı</td><td>Auth :8001</td></tr>
+              <tr><td><span class="method method-post">POST</span></td><td class="endpoint">/auth/login</td><td>Giriş, JWT token</td><td>Auth :8001</td></tr>
+              <tr><td><span class="method method-get">GET</span></td><td class="endpoint">/trips</td><td>Seferleri listele</td><td>Trip :8003</td></tr>
+              <tr><td><span class="method method-get">GET</span></td><td class="endpoint">/trips/{id}</td><td>Sefer detayı + koltuklar</td><td>Trip :8003</td></tr>
+              <tr><td><span class="method method-post">POST</span></td><td class="endpoint">/bookings</td><td>Bilet rezervasyonu oluştur</td><td>Booking :8004</td></tr>
+              <tr><td><span class="method method-get">GET</span></td><td class="endpoint">/bookings/me</td><td>Rezervasyonlarım</td><td>Booking :8004</td></tr>
+              <tr><td><span class="method method-delete">DELETE</span></td><td class="endpoint">/bookings/{id}</td><td>Rezervasyon iptali</td><td>Booking :8004</td></tr>
+              <tr><td><span class="method method-post">POST</span></td><td class="endpoint">/payments</td><td>Ödeme işlemi (mock)</td><td>Payment :8005</td></tr>
+              <tr><td><span class="method method-get">GET</span></td><td class="endpoint">/notifications/me</td><td>Bildirimlerim</td><td>Notify :8006</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div><!-- /left -->
+
+    <!-- RIGHT SIDEBAR -->
+    <div class="sidebar">
+
+      <!-- About -->
+      <div class="sidebar-card">
+        <h3>Hakkında</h3>
+        <p class="about-desc">🚌 Mikroservis mimarisi ile geliştirilmiş tam özellikli otobüs bilet rezervasyon sistemi.</p>
+        <div class="about-item"><span class="ico">🔗</span><span style="color:var(--purple-300)">bus-ticket.local</span></div>
+        <div class="about-item"><span class="ico">⭐</span><span>0 yıldız &nbsp;·&nbsp; 0 fork</span></div>
+        <div class="about-item"><span class="ico">📋</span><span>MIT Lisansı</span></div>
+        <div style="margin-top:12px;display:flex;flex-wrap:wrap;gap:6px">
+          <span class="badge badge-python" style="font-size:11px">python</span>
+          <span class="badge badge-docker" style="font-size:11px">docker</span>
+          <span class="badge badge-k8s" style="font-size:11px">kubernetes</span>
+          <span class="badge badge-kafka" style="font-size:11px">kafka</span>
+          <span class="badge badge-postgres" style="font-size:11px">fastapi</span>
+          <span class="badge badge-redis" style="font-size:11px">microservices</span>
+        </div>
+      </div>
+
+      <!-- Releases -->
+      <div class="sidebar-card">
+        <h3>Sürümler</h3>
+        <div class="release-item">
+          <div>
+            <div class="release-tag">v1.0.0</div>
+            <div class="release-name" style="margin-top:4px">İlk Sürüm</div>
+          </div>
+          <span class="release-latest">En Son</span>
+        </div>
+        <div style="margin-top:10px;font-size:13px;color:var(--purple-300);cursor:pointer">+ Sürüm oluştur</div>
+      </div>
+
+      <!-- Languages -->
+      <div class="sidebar-card">
+        <h3>Diller</h3>
+        <div class="lang-bar">
+          <div class="lang-seg" style="flex:72;background:#3b82f6" title="Python 72%"></div>
+          <div class="lang-seg" style="flex:18;background:#7c3aed" title="YAML 18%"></div>
+          <div class="lang-seg" style="flex:7;background:#0ea5e9" title="Dockerfile 7%"></div>
+          <div class="lang-seg" style="flex:3;background:#6b7280" title="Other 3%"></div>
+        </div>
+        <div class="lang-list">
+          <div class="lang-item">
+            <div class="lang-dot-label">
+              <div class="lang-dot" style="background:#3b82f6"></div>Python
+            </div>
+            <span class="lang-pct">72.0%</span>
+          </div>
+          <div class="lang-item">
+            <div class="lang-dot-label">
+              <div class="lang-dot" style="background:#7c3aed"></div>YAML
+            </div>
+            <span class="lang-pct">18.0%</span>
+          </div>
+          <div class="lang-item">
+            <div class="lang-dot-label">
+              <div class="lang-dot" style="background:#0ea5e9"></div>Dockerfile
+            </div>
+            <span class="lang-pct">7.0%</span>
+          </div>
+          <div class="lang-item">
+            <div class="lang-dot-label">
+              <div class="lang-dot" style="background:#6b7280"></div>SQL / Nginx
+            </div>
+            <span class="lang-pct">3.0%</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Contributors -->
+      <div class="sidebar-card">
+        <h3>Katkıda Bulunanlar <span style="color:var(--gray-500);font-weight:400">1</span></h3>
+        <div class="contributors">
+          <div class="contributor-av" title="emine-dev-cev">E</div>
+        </div>
+      </div>
+
+      <!-- Quick Commands -->
+      <div class="sidebar-card">
+        <h3>⚙️ Kubernetes</h3>
+        <div class="docker-cmd" style="margin:0;font-size:12px">
+          <div><span class="prompt">$</span> kubectl create namespace bus-ticket</div>
+          <div><span class="prompt">$</span> kubectl apply -f k8s/ -n bus-ticket</div>
+          <div><span class="prompt">$</span> kubectl get pods -n bus-ticket</div>
+        </div>
+      </div>
+
+    </div><!-- /sidebar -->
+  </div><!-- /repo-grid -->
+</div><!-- /main -->
+
+<!-- FOOTER -->
+<footer>
+  <a class="footer-link" href="#">© 2026 GitHub, Inc.</a>
+  <a class="footer-link" href="#">Koşullar</a>
+  <a class="footer-link" href="#">Gizlilik</a>
+  <a class="footer-link" href="#">Güvenlik</a>
+  <a class="footer-link" href="#">Durum</a>
+  <a class="footer-link" href="#">Belgeler</a>
+  <a class="footer-link" href="#">Kişisel veri yönetimi</a>
+</footer>
+
+<script>
+  // Tab switching
+  document.querySelectorAll('.repo-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.repo-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+    });
+  });
+
+  // Hover effects on docker cards
+  document.querySelectorAll('.docker-service-card').forEach(card => {
+    card.addEventListener('mouseenter', () => {
+      card.style.boxShadow = '0 0 24px rgba(124,58,237,0.3)';
+    });
+    card.addEventListener('mouseleave', () => {
+      card.style.boxShadow = 'none';
+    });
+  });
+</script>
+</body>
+</html>
