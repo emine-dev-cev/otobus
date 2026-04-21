@@ -20,6 +20,7 @@ app = FastAPI(
     version="1.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
+    redirect_slashes=False,
 )
 
 app.add_middleware(
@@ -40,23 +41,44 @@ def get_current_user(
     try:
         payload = decode_token(credentials.credentials)
         if payload.get("type") != "access":
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Geçersiz token.")
-        user = db.query(User).filter(User.id == payload["sub"]).first()
-        if not user or not user.is_active:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Geçersiz token tipi.")
+        
+        user_id = payload.get("sub")
+        user = db.query(User).filter(User.id == user_id).first()
+        
+        if not user:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Kullanıcı bulunamadı.")
+        
+        if not user.is_active:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Hesap aktif değil.")
+            
         return user
-    except JWTError:
+    except JWTError as e:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Geçersiz token.")
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Sistem hatası.")
 
 
 app.include_router(auth_router)
 
 
 @app.get("/auth/me", response_model=UserResponse, tags=["Authentication"])
-def get_me(current_user: User = Depends(get_current_user)):
-    return current_user
+@app.get("/auth/me/", response_model=UserResponse, tags=["Authentication"], include_in_schema=False)
+def get_my_info(current_user: User = Depends(get_current_user)):
+    try:
+        return {
+            "id": current_user.id,
+            "email": current_user.email,
+            "full_name": current_user.full_name,
+            "role": current_user.role,
+            "is_active": current_user.is_active,
+            "created_at": current_user.created_at
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Kullanıcı bilgileri işlenemedi.")
 
 
 @app.get("/auth/health", tags=["Health"])
+@app.get("/auth/health/", tags=["Health"], include_in_schema=False)
 def health():
     return {"status": "ok", "service": "auth-service"}

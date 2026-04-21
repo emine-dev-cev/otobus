@@ -45,6 +45,12 @@ services:
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
+      ZOOKEEPER_SESSION_TIMEOUT: 60000
+    healthcheck:
+      test: ["CMD", "bash", "-c", "echo stat | nc localhost 2181"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
     networks:
       - bus-net
 
@@ -52,7 +58,8 @@ services:
     image: confluentinc/cp-kafka:7.5.0
     container_name: bt-kafka
     depends_on:
-      - zookeeper
+      zookeeper:
+        condition: service_healthy
     ports:
       - "9092:9092"
     environment:
@@ -63,11 +70,15 @@ services:
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      KAFKA_ZOOKEEPER_SESSION_TIMEOUT_MS: 60000
+      KAFKA_ZOOKEEPER_CONNECTION_TIMEOUT_MS: 60000
     healthcheck:
       test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
-      interval: 30s
+      interval: 15s
       timeout: 10s
-      retries: 5
+      retries: 10
+      start_period: 30s
     networks:
       - bus-net
 
@@ -78,12 +89,12 @@ services:
     build: ./services/auth-service
     container_name: bt-auth
     environment:
-      DATABASE_URL: postgresql://postgres:password@postgres:5432/auth_db
+      DATABASE_URL: postgresql://postgres:password@bt-postgres:5432/auth_db
       SECRET_KEY: super-secret-key-change-in-production-123456
       ALGORITHM: HS256
       ACCESS_TOKEN_EXPIRE_MINUTES: 30
       REFRESH_TOKEN_EXPIRE_DAYS: 7
-      REDIS_URL: redis://redis:6379
+      REDIS_URL: redis://bt-redis:6379
     ports:
       - "8001:8001"
     depends_on:
@@ -94,15 +105,17 @@ services:
     networks:
       - bus-net
     restart: unless-stopped
+    volumes:
+      - ./services/auth-service:/app
 
   user-service:
     build: ./services/user-service
     container_name: bt-user
     environment:
-      DATABASE_URL: postgresql://postgres:password@postgres:5432/user_db
+      DATABASE_URL: postgresql://postgres:password@bt-postgres:5432/user_db
       SECRET_KEY: super-secret-key-change-in-production-123456
       ALGORITHM: HS256
-      REDIS_URL: redis://redis:6379
+      REDIS_URL: redis://bt-redis:6379
     ports:
       - "8002:8002"
     depends_on:
@@ -113,15 +126,17 @@ services:
     networks:
       - bus-net
     restart: unless-stopped
+    volumes:
+      - ./services/user-service:/app
 
   trip-service:
     build: ./services/trip-service
     container_name: bt-trip
     environment:
-      DATABASE_URL: postgresql://postgres:password@postgres:5432/trip_db
+      DATABASE_URL: postgresql://postgres:password@bt-postgres:5432/trip_db
       SECRET_KEY: super-secret-key-change-in-production-123456
       ALGORITHM: HS256
-      REDIS_URL: redis://redis:6379
+      REDIS_URL: redis://bt-redis:6379
     ports:
       - "8003:8003"
     depends_on:
@@ -132,54 +147,60 @@ services:
     networks:
       - bus-net
     restart: unless-stopped
+    volumes:
+      - ./services/trip-service:/app
 
   booking-service:
     build: ./services/booking-service
     container_name: bt-booking
     environment:
-      DATABASE_URL: postgresql://postgres:password@postgres:5432/booking_db
+      DATABASE_URL: postgresql://postgres:password@bt-postgres:5432/booking_db
       SECRET_KEY: super-secret-key-change-in-production-123456
       ALGORITHM: HS256
-      REDIS_URL: redis://redis:6379
+      REDIS_URL: redis://bt-redis:6379
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
-      TRIP_SERVICE_URL: http://trip-service:8003
+      TRIP_SERVICE_URL: http://bt-trip:8003
     ports:
       - "8004:8004"
     depends_on:
       postgres:
         condition: service_healthy
-      kafka:
+      redis:
         condition: service_healthy
     networks:
       - bus-net
     restart: unless-stopped
+    volumes:
+      - ./services/booking-service:/app
 
   payment-service:
     build: ./services/payment-service
     container_name: bt-payment
     environment:
-      DATABASE_URL: postgresql://postgres:password@postgres:5432/payment_db
+      DATABASE_URL: postgresql://postgres:password@bt-postgres:5432/payment_db
       SECRET_KEY: super-secret-key-change-in-production-123456
       ALGORITHM: HS256
-      REDIS_URL: redis://redis:6379
+      REDIS_URL: redis://bt-redis:6379
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
-      BOOKING_SERVICE_URL: http://booking-service:8004
+      BOOKING_SERVICE_URL: http://bt-booking:8004
     ports:
       - "8005:8005"
     depends_on:
       postgres:
         condition: service_healthy
-      kafka:
+      redis:
         condition: service_healthy
     networks:
       - bus-net
     restart: unless-stopped
+    volumes:
+      - ./services/payment-service:/app
 
   notification-service:
     build: ./services/notification-service
     container_name: bt-notification
     environment:
-      DATABASE_URL: postgresql://postgres:password@postgres:5432/notification_db
+      DATABASE_URL: postgresql://postgres:password@bt-postgres:5432/notification_db
       SECRET_KEY: super-secret-key-change-in-production-123456
       ALGORITHM: HS256
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
@@ -192,11 +213,11 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      kafka:
-        condition: service_healthy
     networks:
       - bus-net
     restart: unless-stopped
+    volumes:
+      - ./services/notification-service:/app
 
   # ─────────────────────────────────────────────
   # API Gateway
@@ -206,6 +227,8 @@ services:
     container_name: bt-gateway
     ports:
       - "80:80"
+    volumes:
+      - ./frontend:/usr/share/nginx/html
     depends_on:
       - auth-service
       - user-service

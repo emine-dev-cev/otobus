@@ -67,7 +67,4 @@ def refresh_token(payload: RefreshRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Geçersiz veya süresi dolmuş token.")
 
 
-@router.get("/me", response_model=UserResponse)
-def get_me(db: Session = Depends(get_db), token: str = Depends(lambda: None)):
-    # This endpoint is handled via the dependency below in main.py
-    pass
+

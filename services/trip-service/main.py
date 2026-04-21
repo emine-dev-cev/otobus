@@ -1,25 +1,32 @@
-from fastapi import FastAPI, HTTPException, Depends, status, Query
+from fastapi import FastAPI, HTTPException, Depends, status, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
 from uuid import UUID
-from datetime import datetime
 from jose import JWTError, jwt
+from datetime import datetime, timezone
 
 from database import Base, engine, get_db
-from models import Trip, Seat, TripStatus
-from schemas import TripCreate, TripResponse, TripDetailResponse, SeatResponse, SeatReserveRequest, SeatReleaseRequest
+from models import Trip, Seat, TripStatus, Company
+from schemas import (
+    TripCreate, TripResponse, TripDetailResponse, SeatResponse, 
+    CompanyCreate, CompanyResponse
+)
+from websocket_manager import manager
 from config import settings
 
+# Create/Update tables
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="Trip Service",
-    description="Bus Ticket App — Trip & Seat Management",
+    description="Bus Ticket App — Managing Bus Trips and Seats",
     version="1.0.0",
+    redirect_slashes=False,
 )
 
+# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -28,128 +35,191 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-security = HTTPBearer(auto_error=False)
+security = HTTPBearer()
 
-
-def get_token_data(credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)) -> Optional[dict]:
-    if not credentials:
-        return None
+# Authentication Helper
+def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> dict:
     try:
         return jwt.decode(credentials.credentials, settings.secret_key, algorithms=[settings.algorithm])
     except JWTError:
-        return None
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Geçersiz token.")
 
+# --- Company Endpoints ---
 
-def require_admin(token_data: Optional[dict] = Depends(get_token_data)):
-    if not token_data or token_data.get("role") != "admin":
-        raise HTTPException(status_code=403, detail="Admin yetkisi gereklidir.")
-    return token_data
+@app.get("/companies", response_model=List[CompanyResponse], tags=["Companies"])
+def get_companies(db: Session = Depends(get_db)):
+    return db.query(Company).all()
 
-
-def _create_seats(db: Session, trip_id: UUID, total_seats: int):
-    seats = [Seat(trip_id=trip_id, seat_number=i + 1) for i in range(total_seats)]
-    db.bulk_save_objects(seats)
+@app.post("/companies", response_model=CompanyResponse, tags=["Companies"])
+def create_company(company_in: CompanyCreate, db: Session = Depends(get_db), token_data: dict = Depends(get_current_user)):
+    company = Company(**company_in.model_dump())
+    db.add(company)
     db.commit()
+    db.refresh(company)
+    return company
 
-
-@app.post("/trips", response_model=TripResponse, status_code=201, tags=["Trips"])
-def create_trip(
-    payload: TripCreate,
-    db: Session = Depends(get_db),
-    _: dict = Depends(require_admin),
-):
-    trip = Trip(
-        origin=payload.origin,
-        destination=payload.destination,
-        departure_time=payload.departure_time,
-        arrival_time=payload.arrival_time,
-        bus_name=payload.bus_name,
-        bus_plate=payload.bus_plate,
-        total_seats=payload.total_seats,
-        available_seats=payload.total_seats,
-        price=payload.price,
-    )
-    db.add(trip)
-    db.commit()
-    db.refresh(trip)
-    _create_seats(db, trip.id, trip.total_seats)
-    return trip
-
+# --- Trip Endpoints ---
 
 @app.get("/trips", response_model=List[TripResponse], tags=["Trips"])
-def list_trips(
-    origin: Optional[str] = Query(None),
-    destination: Optional[str] = Query(None),
-    date: Optional[str] = Query(None, description="YYYY-MM-DD"),
-    db: Session = Depends(get_db),
+def get_trips(
+    origin: Optional[str] = None,
+    destination: Optional[str] = None,
+    company_id: Optional[UUID] = None,
+    min_price: Optional[float] = None,
+    max_price: Optional[float] = None,
+    db: Session = Depends(get_db)
 ):
-    query = db.query(Trip).filter(Trip.status != TripStatus.cancelled)
+    query = db.query(Trip).options(joinedload(Trip.company)).filter(Trip.status != TripStatus.cancelled)
+    
     if origin:
         query = query.filter(Trip.origin.ilike(f"%{origin}%"))
     if destination:
         query = query.filter(Trip.destination.ilike(f"%{destination}%"))
-    if date:
-        try:
-            target_date = datetime.strptime(date, "%Y-%m-%d").date()
-            query = query.filter(
-                Trip.departure_time >= datetime.combine(target_date, datetime.min.time()),
-                Trip.departure_time < datetime.combine(target_date, datetime.max.time()),
-            )
-        except ValueError:
-            raise HTTPException(status_code=400, detail="Geçersiz tarih formatı. YYYY-MM-DD kullanın.")
-    return query.order_by(Trip.departure_time).all()
-
+    if company_id:
+        query = query.filter(Trip.company_id == company_id)
+    if min_price is not None:
+        query = query.filter(Trip.price >= min_price)
+    if max_price is not None:
+        query = query.filter(Trip.price <= max_price)
+        
+    return query.all()
 
 @app.get("/trips/{trip_id}", response_model=TripDetailResponse, tags=["Trips"])
-def get_trip(trip_id: UUID, db: Session = Depends(get_db)):
-    trip = db.query(Trip).filter(Trip.id == trip_id).first()
+def get_trip_detail(trip_id: UUID, db: Session = Depends(get_db)):
+    trip = db.query(Trip).options(joinedload(Trip.company)).filter(Trip.id == trip_id).first()
     if not trip:
         raise HTTPException(status_code=404, detail="Sefer bulunamadı.")
+    
     seats = db.query(Seat).filter(Seat.trip_id == trip_id).order_by(Seat.seat_number).all()
-    result = TripDetailResponse.model_validate(trip)
-    result.seats = [SeatResponse.model_validate(s) for s in seats]
-    return result
+    
+    # We return a dict to match what TripDetailResponse expects
+    return {
+        "id": trip.id,
+        "origin": trip.origin,
+        "destination": trip.destination,
+        "departure_time": trip.departure_time,
+        "arrival_time": trip.arrival_time,
+        "bus_plate": trip.bus_plate,
+        "bus_type": trip.bus_type,
+        "bus_layout": trip.bus_layout,
+        "total_seats": trip.total_seats,
+        "available_seats": trip.available_seats,
+        "price": trip.price,
+        "status": trip.status,
+        "amenities": trip.amenities,
+        "description": trip.description,
+        "estimated_duration": trip.estimated_duration,
+        "created_at": trip.created_at,
+        "company": trip.company,
+        "seats": seats
+    }
 
+@app.post("/trips", response_model=TripResponse, tags=["Trips"])
+def create_trip(trip_in: TripCreate, db: Session = Depends(get_db), token_data: dict = Depends(get_current_user)):
+    trip_data = trip_in.model_dump()
+    trip = Trip(**trip_data)
+    db.add(trip)
+    db.commit()
+    db.refresh(trip)
+    
+    # Initialize seats
+    for i in range(1, trip.total_seats + 1):
+        seat = Seat(trip_id=trip.id, seat_number=i)
+        db.add(seat)
+    
+    db.commit()
+    return trip
 
-@app.post("/trips/{trip_id}/reserve-seat", tags=["Seats"])
-def reserve_seat(trip_id: UUID, payload: SeatReserveRequest, db: Session = Depends(get_db)):
+@app.patch("/trips/{trip_id}/status", tags=["Trips"])
+def update_trip_status(trip_id: UUID, status: str, db: Session = Depends(get_db), token_data: dict = Depends(get_current_user)):
     trip = db.query(Trip).filter(Trip.id == trip_id).first()
     if not trip:
         raise HTTPException(status_code=404, detail="Sefer bulunamadı.")
-    if trip.available_seats <= 0:
-        raise HTTPException(status_code=409, detail="Bu seferde yer kalmadı.")
-    seat = db.query(Seat).filter(
-        Seat.trip_id == trip_id,
-        Seat.seat_number == payload.seat_number,
-    ).first()
+    
+    trip.status = status
+    db.commit()
+    return {"message": "Sefer durumu güncellendi."}
+
+# Aligning with Booking Service expectations
+@app.post("/trips/{trip_id}/reserve-seat")
+async def reserve_seat(
+    trip_id: UUID, 
+    payload: dict, # {"seat_number": int, "user_id": UUID, "gender": Optional[str]}
+    db: Session = Depends(get_db)
+):
+    seat_number = payload.get("seat_number")
+    user_id = payload.get("user_id")
+    gender = payload.get("gender")
+
+    trip = db.query(Trip).filter(Trip.id == trip_id).first()
+    if not trip:
+        raise HTTPException(status_code=404, detail="Sefer bulunamadı.")
+    
+    seat = db.query(Seat).filter(Seat.trip_id == trip_id, Seat.seat_number == seat_number).first()
     if not seat:
         raise HTTPException(status_code=404, detail="Koltuk bulunamadı.")
+    
     if seat.is_reserved:
-        raise HTTPException(status_code=409, detail="Bu koltuk zaten rezerve edilmiş.")
+        raise HTTPException(status_code=400, detail="Koltuk zaten dolu.")
+    
     seat.is_reserved = True
-    seat.reserved_by = payload.user_id
+    seat.reserved_by = user_id
+    seat.gender = gender
     trip.available_seats -= 1
     db.commit()
-    return {"message": "Koltuk başarıyla rezerve edildi.", "seat_number": seat.seat_number}
+    
+    await manager.broadcast(trip_id, {
+        "type": "seat_update", 
+        "seat_number": seat_number, 
+        "is_reserved": True, 
+        "gender": gender
+    })
+    
+    return {"message": "Koltuk başarıyla rezerve edildi."}
 
-
-@app.post("/trips/{trip_id}/release-seat", tags=["Seats"])
-def release_seat(trip_id: UUID, payload: SeatReleaseRequest, db: Session = Depends(get_db)):
-    seat = db.query(Seat).filter(
-        Seat.trip_id == trip_id,
-        Seat.seat_number == payload.seat_number,
-    ).first()
+@app.post("/trips/{trip_id}/release-seat")
+async def release_seat(trip_id: UUID, payload: dict, db: Session = Depends(get_db)):
+    seat_number = payload.get("seat_number")
+    
+    trip = db.query(Trip).filter(Trip.id == trip_id).first()
+    if not trip:
+        raise HTTPException(status_code=404, detail="Sefer bulunamadı.")
+    
+    seat = db.query(Seat).filter(Seat.trip_id == trip_id, Seat.seat_number == seat_number).first()
     if not seat:
         raise HTTPException(status_code=404, detail="Koltuk bulunamadı.")
+    
+    if not seat.is_reserved:
+        return {"message": "Koltuk zaten boş."}
+    
     seat.is_reserved = False
     seat.reserved_by = None
-    trip = db.query(Trip).filter(Trip.id == trip_id).first()
-    if trip:
-        trip.available_seats += 1
+    seat.gender = None
+    trip.available_seats += 1
     db.commit()
+    
+    await manager.broadcast(trip_id, {"type": "seat_update", "seat_number": seat_number, "is_reserved": False})
+    
     return {"message": "Koltuk serbest bırakıldı."}
 
+@app.get("/trips/stats/summary", tags=["Trips"])
+def get_stats(db: Session = Depends(get_db)):
+    total_trips = db.query(Trip).count()
+    total_cities = db.query(Trip.origin).union(db.query(Trip.destination)).distinct().count()
+    return {
+        "total_trips": total_trips,
+        "total_cities": total_cities,
+        "happy_users": 150000,
+        "rating": 4.8
+    }
 
-@app.get("/trips/health", tags=["Health"])
-def health():
-    return {"status": "ok", "service": "trip-service"}
+from fastapi import WebSocket, WebSocketDisconnect
+
+@app.websocket("/ws/{trip_id}")
+async def websocket_endpoint(websocket: WebSocket, trip_id: str):
+    await manager.connect(websocket, trip_id)
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(websocket, trip_id)

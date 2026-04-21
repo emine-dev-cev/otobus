@@ -18,6 +18,7 @@ app = FastAPI(
     title="Notification Service",
     description="Bus Ticket App — Email & SMS Notifications via Kafka",
     version="1.0.0",
+    redirect_slashes=False,
 )
 
 app.add_middleware(

@@ -10,6 +10,7 @@ class BookingCreate(BaseModel):
     seat_number: int
     passenger_name: str
     passenger_tc: str = Field(..., min_length=11, max_length=11)
+    passenger_gender: Optional[str] = None # "E" or "K"
     total_price: float
 
 
@@ -20,6 +21,7 @@ class BookingResponse(BaseModel):
     seat_number: int
     passenger_name: str
     passenger_tc: str
+    passenger_gender: Optional[str]
     total_price: float
     status: BookingStatus
     created_at: datetime

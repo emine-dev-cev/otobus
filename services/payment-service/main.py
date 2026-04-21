@@ -20,6 +20,7 @@ app = FastAPI(
     title="Payment Service",
     description="Bus Ticket App — Mock Payment Processing",
     version="1.0.0",
+    redirect_slashes=False,
 )
 
 app.add_middleware(
@@ -41,7 +42,11 @@ async def shutdown():
 def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> dict:
     try:
         return jwt.decode(credentials.credentials, settings.secret_key, algorithms=[settings.algorithm])
-    except JWTError:
+    except JWTError as e:
+        print(f"[Payment] JWT Validation Error: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Geçersiz token.")
+    except Exception as e:
+        print(f"[Payment] Unexpected Auth Error: {str(e)}")
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Geçersiz token.")
 
 
@@ -61,8 +66,8 @@ async def process_payment(
     if existing:
         raise HTTPException(status_code=409, detail="Bu rezervasyon için ödeme zaten yapılmış.")
 
-    # Mock payment processing — 90% success rate
-    is_success = random.random() < 0.90
+    # Payment processing — always successful as requested
+    is_success = True
     transaction_id = f"TXN-{uuid.uuid4().hex[:12].upper()}"
 
     payment = Payment(
@@ -138,5 +143,6 @@ def get_payment(
 
 
 @app.get("/payments/health", tags=["Health"])
+@app.get("/payments/health/", tags=["Health"], include_in_schema=False)
 def health():
     return {"status": "ok", "service": "payment-service"}

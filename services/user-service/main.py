@@ -17,6 +17,7 @@ app = FastAPI(
     title="User Service",
     description="Bus Ticket App — User Profile Management",
     version="1.0.0",
+    redirect_slashes=False,
 )
 
 app.add_middleware(
@@ -65,38 +66,7 @@ def get_my_profile(
     return profile
 
 
-@app.put("/users/me", response_model=UserProfileResponse, tags=["Users"])
-def update_my_profile(
-    payload: UserProfileUpdate,
-    token_data: dict = Depends(get_current_user_id),
-    db: Session = Depends(get_db),
-):
-    profile = db.query(UserProfile).filter(
-        UserProfile.auth_user_id == token_data["sub"]
-    ).first()
-    if not profile:
-        raise HTTPException(status_code=404, detail="Profil bulunamadı.")
-    for field, value in payload.model_dump(exclude_unset=True).items():
-        setattr(profile, field, value)
-    db.commit()
-    db.refresh(profile)
-    return profile
-
-
-@app.get("/users/{user_id}", response_model=UserProfileResponse, tags=["Users"])
-def get_user_by_id(
-    user_id: UUID,
-    token_data: dict = Depends(get_current_user_id),
-    db: Session = Depends(get_db),
-):
-    if token_data.get("role") != "admin":
-        raise HTTPException(status_code=403, detail="Admin yetkisi gereklidir.")
-    profile = db.query(UserProfile).filter(UserProfile.auth_user_id == user_id).first()
-    if not profile:
-        raise HTTPException(status_code=404, detail="Kullanıcı bulunamadı.")
-    return profile
-
-
 @app.get("/users/health", tags=["Health"])
+@app.get("/users/health/", tags=["Health"], include_in_schema=False)
 def health():
     return {"status": "ok", "service": "user-service"}

@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <title>OtoBilet Admin 🛠️</title>
+  <style>
+    :root { --p: #a855f7; --bg: #faf7ff; --t: #1e1240; }
+    body { font-family: sans-serif; background: var(--bg); color: var(--t); padding: 40px; }
+    .card { background: white; padding: 25px; border-radius: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); max-width: 600px; margin: 0 auto; }
+    h1 { text-align: center; color: var(--p); }
+    .form-group { margin-bottom: 15px; }
+    label { display: block; font-size: 12px; font-weight: bold; margin-bottom: 5px; color: var(--p); }
+    input, textarea { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; }
+    button { width: 100%; padding: 12px; background: var(--p); color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; margin-top: 10px; }
+    button:hover { opacity: 0.9; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Yeni Sefer Ekle</h1>
+    <div class="grid">
+      <div class="form-group"><label>Nereden</label><input type="text" id="origin" value="İstanbul"></div>
+      <div class="form-group"><label>Nereye</label><input type="text" id="destination" value="Ankara"></div>
+    </div>
+    <div class="grid">
+      <div class="form-group"><label>Kalkış</label><input type="datetime-local" id="dep"></div>
+      <div class="form-group"><label>Varış</label><input type="datetime-local" id="arr"></div>
+    </div>
+    <div class="grid">
+      <div class="form-group"><label>Otobüs/Firma</label><input type="text" id="bus" value="Metro Turizm"></div>
+      <div class="form-group"><label>Plaka</label><input type="text" id="plate" value="34 ABC 123"></div>
+    </div>
+    <div class="grid">
+      <div class="form-group"><label>Fiyat (₺)</label><input type="number" id="price" value="450"></div>
+      <div class="form-group"><label>Süre</label><input type="text" id="dur" value="5s 0dk"></div>
+    </div>
+    <div class="form-group"><label>İkramlar (Virgülle ayırın)</label><input type="text" id="amenities" value="Wi-Fi, Priz, Su"></div>
+    <div class="form-group"><label>Sefer Açıklaması</label><textarea id="desc" rows="3">Konforlu ve güvenli yolculuk.</textarea></div>
+    <button onclick="createTrip()">🚀 Seferi Yayınla</button>
+  </div>
+
+  <script>
+    async function createTrip(){
+      const token = localStorage.getItem('token');
+      if(!token) return alert('Lütfen önce ana sayfadan giriş yapın (Admin hesabı ile).');
+      
+      const payload = {
+        origin: document.getElementById('origin').value,
+        destination: document.getElementById('destination').value,
+        departure_time: new Date(document.getElementById('dep').value).toISOString(),
+        arrival_time: new Date(document.getElementById('arr').value).toISOString(),
+        bus_name: document.getElementById('bus').value,
+        bus_plate: document.getElementById('plate').value,
+        total_seats: 40,
+        price: parseFloat(document.getElementById('price').value),
+        amenities: document.getElementById('amenities').value,
+        description: document.getElementById('desc').value,
+        estimated_duration: document.getElementById('dur').value
+      };
+
+      const res = await fetch('http://localhost:80/trips/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify(payload)
+      });
+
+      if(res.ok) {
+        alert('Sefer başarıyla oluşturuldu! ✅');
+        window.location.href = 'index.html';
+      } else {
+        const err = await res.json();
+        alert('Hata: ' + JSON.stringify(err));
+      }
+    }
+    // Set default dates
+    const now = new Date();
+    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+    document.getElementById('dep').value = now.toISOString().slice(0,16);
+    now.setHours(now.getHours() + 5);
+    document.getElementById('arr').value = now.toISOString().slice(0,16);
+  </script>
+</body>
+</html>

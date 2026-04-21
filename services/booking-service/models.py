@@ -22,6 +22,7 @@ class Booking(Base):
     seat_number = Column(Integer, nullable=False)
     passenger_name = Column(String, nullable=False)
     passenger_tc = Column(String(11), nullable=False)
+    passenger_gender = Column(String, nullable=True) # "E" or "K"
     total_price = Column(Float, nullable=False)
     status = Column(SAEnum(BookingStatus), default=BookingStatus.pending)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))

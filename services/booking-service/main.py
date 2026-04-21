@@ -19,6 +19,7 @@ app = FastAPI(
     title="Booking Service",
     description="Bus Ticket App — Ticket Reservation",
     version="1.0.0",
+    redirect_slashes=False,
 )
 
 app.add_middleware(
@@ -40,7 +41,11 @@ async def shutdown():
 def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> dict:
     try:
         return jwt.decode(credentials.credentials, settings.secret_key, algorithms=[settings.algorithm])
-    except JWTError:
+    except JWTError as e:
+        print(f"[Booking] JWT Validation Error: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Geçersiz token.")
+    except Exception as e:
+        print(f"[Booking] Unexpected Auth Error: {str(e)}")
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Geçersiz token.")
 
 
@@ -66,11 +71,26 @@ async def create_booking(
         try:
             resp = await client.post(
                 f"{settings.trip_service_url}/trips/{payload.trip_id}/reserve-seat",
-                json={"seat_number": payload.seat_number, "user_id": user_id},
+                json={"seat_number": payload.seat_number, "user_id": user_id, "gender": payload.passenger_gender},
                 timeout=10.0,
             )
             if resp.status_code != 200:
-                raise HTTPException(status_code=resp.status_code, detail=resp.json().get("detail", "Koltuk rezerve edilemedi."))
+                error_detail = "Koltuk rezerve edilemedi."
+                print(f"[Booking] Trip service error {resp.status_code}: {resp.text[:100]}")
+                try:
+                    resp_json = resp.json()
+                    error_detail = resp_json.get("detail", error_detail)
+                except Exception:
+                    error_detail = f"Trip Servisi Hatası: {resp.status_code}"
+                
+                raise HTTPException(status_code=resp.status_code, detail=error_detail)
+            
+            # Additional safety for success case
+            try:
+                resp_json = resp.json()
+            except Exception:
+                print(f"[Booking] Trip service success but invalid JSON: {resp.text[:100]}")
+
         except httpx.RequestError:
             raise HTTPException(status_code=503, detail="Trip servisi erişilemiyor.")
 
@@ -80,12 +100,30 @@ async def create_booking(
         seat_number=payload.seat_number,
         passenger_name=payload.passenger_name,
         passenger_tc=payload.passenger_tc,
+        passenger_gender=payload.passenger_gender,
         total_price=payload.total_price,
         status=BookingStatus.pending,
     )
-    db.add(booking)
-    db.commit()
-    db.refresh(booking)
+    
+    try:
+        db.add(booking)
+        db.commit()
+        db.refresh(booking)
+    except Exception as e:
+        db.rollback()
+        print(f"[Booking] Database error, releasing seat: {str(e)}")
+        # Compensate: Release the seat in trip service
+        async with httpx.AsyncClient() as client:
+            try:
+                await client.post(
+                    f"{settings.trip_service_url}/trips/{payload.trip_id}/release-seat",
+                    json={"seat_number": payload.seat_number},
+                    timeout=5.0,
+                )
+            except Exception as re:
+                print(f"[Booking] Compensation failed (release-seat): {str(re)}")
+        
+        raise HTTPException(status_code=500, detail="Rezervasyon kaydedilemedi, lütfen tekrar deneyin.")
 
     # Publish Kafka event
     await publish("booking.created", {
@@ -180,5 +218,6 @@ def update_booking_status(
 
 
 @app.get("/bookings/health", tags=["Health"])
+@app.get("/bookings/health/", tags=["Health"], include_in_schema=False)
 def health():
     return {"status": "ok", "service": "booking-service"}
